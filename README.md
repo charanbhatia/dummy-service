@@ -45,7 +45,7 @@ This project showcases a production-ready observability stack for FastAPI applic
 ### 1. Clone and Setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/charanbhatia/dummy-service
 cd fastapi-observability-demo
 ```
 
@@ -103,7 +103,7 @@ python tests/simulate_traffic.py
 ### Metrics (Prometheus)
 - `http_requests_total` - Total HTTP requests by method, endpoint, status
 - `http_request_duration_seconds` - Request latency histogram
-- `active_users_total` - Current number of users in system
+- `active_users_total` - Current number of users in the system
 - `http_errors_total` - Error count by type and endpoint
 - Built-in FastAPI metrics via instrumentator
 
@@ -205,36 +205,6 @@ python tests/simulate_traffic.py
 └── start_stack.sh          # Linux/Mac startup script
 ```
 
-## 🎬 Demo Script for Recording
-
-### 1. Start the Stack (30 seconds)
-```bash
-.\start_stack.ps1
-# Show services starting up
-docker-compose ps
-```
-
-### 2. Generate Traffic (1 minute)
-```bash
-python tests/simulate_traffic.py
-# Show real-time requests in terminal
-```
-
-### 3. Grafana Dashboard (2 minutes)
-- Open http://localhost:3000 (admin/admin)
-- Navigate to FastAPI Observability Dashboard
-- Show real-time metrics, logs, and traces
-- Demonstrate filtering and time ranges
-
-### 4. Prometheus Metrics (30 seconds)
-- Open http://localhost:9090
-- Query custom metrics: `http_requests_total`
-- Show metric exploration
-
-### 5. Jaeger Traces (1 minute)
-- Open http://localhost:16686
-- Search for traces from fastapi-observability-demo
-- Show trace details and spans
 
 ## 🛑 Cleanup
 
