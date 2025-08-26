@@ -6,9 +6,11 @@ import random
 from typing import List
 from prometheus_fastapi_instrumentator import Instrumentator
 import logging
+from opentelemetry import trace
 
 from .models import HealthResponse, User, UserCreate, MessageResponse
 from .logging_config import setup_logging
+from .tracing_config import setup_tracing, get_tracer, create_span, add_span_attributes, add_span_event
 
 # Setup logging
 logger = setup_logging()
@@ -23,6 +25,9 @@ app = FastAPI(
 # Initialize Prometheus metrics
 instrumentator = Instrumentator()
 instrumentator.instrument(app).expose(app)
+
+# Initialize tracing
+tracer = setup_tracing(app)
 
 # Custom metrics
 from prometheus_client import Counter, Histogram, Gauge
@@ -98,27 +103,45 @@ user_id_counter = 1
 @app.on_event("startup")
 async def startup_event():
     """Application startup event"""
-    logger.info(
-        "FastAPI application starting up",
-        extra={
-            "app_name": "FastAPI Observability Demo",
-            "version": "1.0.0",
-            "startup_time": datetime.utcnow().isoformat()
-        }
-    )
+    with tracer.start_as_current_span("app_startup") as span:
+        add_span_attributes(span, {
+            "app.name": "FastAPI Observability Demo",
+            "app.version": "1.0.0",
+            "event.type": "startup"
+        })
+        
+        logger.info(
+            "FastAPI application starting up",
+            extra={
+                "app_name": "FastAPI Observability Demo",
+                "version": "1.0.0",
+                "startup_time": datetime.utcnow().isoformat()
+            }
+        )
+        
+        add_span_event(span, "application_started")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event"""
-    logger.info(
-        "FastAPI application shutting down",
-        extra={
-            "app_name": "FastAPI Observability Demo",
-            "shutdown_time": datetime.utcnow().isoformat(),
+    with tracer.start_as_current_span("app_shutdown") as span:
+        add_span_attributes(span, {
+            "app.name": "FastAPI Observability Demo",
+            "event.type": "shutdown",
             "total_users_created": len(users_db)
-        }
-    )
+        })
+        
+        logger.info(
+            "FastAPI application shutting down",
+            extra={
+                "app_name": "FastAPI Observability Demo",
+                "shutdown_time": datetime.utcnow().isoformat(),
+                "total_users_created": len(users_db)
+            }
+        )
+        
+        add_span_event(span, "application_stopped")
 
 
 @app.get("/")
@@ -165,6 +188,18 @@ async def create_user(user: UserCreate):
     """Create a new user"""
     global user_id_counter
     
+    # Get the current span
+    current_span = trace.get_current_span()
+    
+    # Add user creation attributes to the span
+    add_span_attributes(current_span, {
+        "user.name": user.name,
+        "user.email": user.email,
+        "user.age": user.age,
+        "operation": "create_user",
+        "current_user_count": len(users_db)
+    })
+    
     logger.info(
         "Creating new user",
         extra={
@@ -175,31 +210,65 @@ async def create_user(user: UserCreate):
         }
     )
     
-    # Simulate some processing time
-    await simulate_processing()
+    # Create a child span for processing simulation
+    with tracer.start_as_current_span("simulate_processing") as processing_span:
+        add_span_attributes(processing_span, {
+            "operation": "simulate_user_creation_processing"
+        })
+        await simulate_processing()
+        add_span_event(processing_span, "processing_completed")
     
-    # Simulate random errors (10% chance)
-    if random.random() < 0.1:
-        logger.error(
-            "Random server error occurred during user creation",
-            extra={
-                "user_name": user.name,
-                "user_email": user.email,
-                "error_type": "random_error"
-            }
+    # Create a child span for error simulation
+    with tracer.start_as_current_span("error_check") as error_span:
+        error_occurred = random.random() < 0.1
+        add_span_attributes(error_span, {
+            "error.will_occur": error_occurred,
+            "error.probability": 0.1
+        })
+        
+        if error_occurred:
+            add_span_event(error_span, "random_error_triggered")
+            add_span_attributes(current_span, {
+                "error": True,
+                "error.type": "random_error"
+            })
+            
+            logger.error(
+                "Random server error occurred during user creation",
+                extra={
+                    "user_name": user.name,
+                    "user_email": user.email,
+                    "error_type": "random_error"
+                }
+            )
+            raise HTTPException(status_code=500, detail="Random server error")
+    
+    # Create a child span for user creation
+    with tracer.start_as_current_span("create_user_object") as create_span:
+        new_user = User(
+            id=user_id_counter,
+            name=user.name,
+            email=user.email,
+            age=user.age,
+            created_at=datetime.utcnow()
         )
-        raise HTTPException(status_code=500, detail="Random server error")
+        
+        add_span_attributes(create_span, {
+            "user.id": new_user.id,
+            "user.created_at": new_user.created_at.isoformat()
+        })
+        
+        users_db.append(new_user)
+        user_id_counter += 1
+        
+        add_span_event(create_span, "user_added_to_database")
     
-    new_user = User(
-        id=user_id_counter,
-        name=user.name,
-        email=user.email,
-        age=user.age,
-        created_at=datetime.utcnow()
-    )
-    
-    users_db.append(new_user)
-    user_id_counter += 1
+    # Update the main span with final attributes
+    add_span_attributes(current_span, {
+        "user.id": new_user.id,
+        "total_users_after": len(users_db),
+        "success": True
+    })
     
     logger.info(
         "User created successfully",
@@ -217,6 +286,14 @@ async def create_user(user: UserCreate):
 @app.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: int):
     """Get a user by ID"""
+    current_span = trace.get_current_span()
+    
+    add_span_attributes(current_span, {
+        "user.id": user_id,
+        "operation": "get_user",
+        "total_users_in_db": len(users_db)
+    })
+    
     logger.info(
         "Retrieving user by ID",
         extra={
@@ -225,28 +302,70 @@ async def get_user(user_id: int):
         }
     )
     
-    await simulate_processing()
+    # Simulate processing with tracing
+    with tracer.start_as_current_span("simulate_processing") as processing_span:
+        add_span_attributes(processing_span, {
+            "operation": "simulate_user_retrieval_processing"
+        })
+        await simulate_processing()
+        add_span_event(processing_span, "processing_completed")
     
-    for user in users_db:
-        if user.id == user_id:
+    # Search for user with tracing
+    with tracer.start_as_current_span("search_user") as search_span:
+        add_span_attributes(search_span, {
+            "search.user_id": user_id,
+            "search.total_users": len(users_db)
+        })
+        
+        found_user = None
+        for user in users_db:
+            if user.id == user_id:
+                found_user = user
+                break
+        
+        if found_user:
+            add_span_attributes(search_span, {
+                "search.result": "found",
+                "user.name": found_user.name,
+                "user.email": found_user.email
+            })
+            add_span_event(search_span, "user_found")
+            
+            add_span_attributes(current_span, {
+                "success": True,
+                "user.name": found_user.name,
+                "user.email": found_user.email
+            })
+            
             logger.info(
                 "User found",
                 extra={
                     "user_id": user_id,
-                    "user_name": user.name,
-                    "user_email": user.email
+                    "user_name": found_user.name,
+                    "user_email": found_user.email
                 }
             )
-            return user
-    
-    logger.warning(
-        "User not found",
-        extra={
-            "user_id": user_id,
-            "total_users": len(users_db)
-        }
-    )
-    raise HTTPException(status_code=404, detail="User not found")
+            return found_user
+        else:
+            add_span_attributes(search_span, {
+                "search.result": "not_found"
+            })
+            add_span_event(search_span, "user_not_found")
+            
+            add_span_attributes(current_span, {
+                "success": False,
+                "error": True,
+                "error.type": "user_not_found"
+            })
+            
+            logger.warning(
+                "User not found",
+                extra={
+                    "user_id": user_id,
+                    "total_users": len(users_db)
+                }
+            )
+            raise HTTPException(status_code=404, detail="User not found")
 
 
 @app.delete("/users/{user_id}", response_model=MessageResponse)
@@ -269,8 +388,16 @@ async def delete_user(user_id: int):
 @app.get("/slow")
 async def slow_endpoint():
     """Endpoint that simulates slow processing"""
+    current_span = trace.get_current_span()
+    
     # Simulate slow processing (2-5 seconds)
     sleep_time = random.uniform(2, 5)
+    
+    add_span_attributes(current_span, {
+        "operation": "slow_processing",
+        "expected_sleep_time": sleep_time,
+        "endpoint": "/slow"
+    })
     
     logger.info(
         "Starting slow processing",
@@ -280,7 +407,21 @@ async def slow_endpoint():
         }
     )
     
-    time.sleep(sleep_time)
+    # Create a child span for the actual slow processing
+    with tracer.start_as_current_span("slow_processing_simulation") as slow_span:
+        add_span_attributes(slow_span, {
+            "processing.type": "simulated_slow_operation",
+            "processing.duration": sleep_time
+        })
+        
+        add_span_event(slow_span, "processing_started")
+        time.sleep(sleep_time)
+        add_span_event(slow_span, "processing_completed")
+    
+    add_span_attributes(current_span, {
+        "actual_sleep_time": sleep_time,
+        "success": True
+    })
     
     logger.info(
         "Slow processing completed",
