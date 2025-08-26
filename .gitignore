@@ -26,6 +26,6 @@ docker-compose.override.yml
 # Environment variables
 .env
 
-# Grafana data
-grafana/
+# Grafana data (but keep configuration)
+grafana/data/
 prometheus/data/
