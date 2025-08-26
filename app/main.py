@@ -1,12 +1,17 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import time
 import random
 from typing import List
 from prometheus_fastapi_instrumentator import Instrumentator
+import logging
 
 from .models import HealthResponse, User, UserCreate, MessageResponse
+from .logging_config import setup_logging
+
+# Setup logging
+logger = setup_logging()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,10 +34,24 @@ REQUEST_LATENCY = Histogram('http_request_duration_seconds', 'HTTP request laten
 ACTIVE_USERS = Gauge('active_users_total', 'Total number of active users')
 ERROR_COUNT = Counter('http_errors_total', 'Total HTTP errors', ['method', 'endpoint', 'error_type'])
 
-# Middleware for custom metrics
+# Middleware for custom metrics and logging
 @app.middleware("http")
-async def metrics_middleware(request, call_next):
+async def metrics_and_logging_middleware(request: Request, call_next):
     start_time = time.time()
+    
+    # Log incoming request
+    logger.info(
+        "Incoming request",
+        extra={
+            "method": request.method,
+            "url": str(request.url),
+            "path": request.url.path,
+            "query_params": str(request.query_params),
+            "client_ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent"),
+            "request_id": id(request)
+        }
+    )
     
     # Process the request
     response = await call_next(request)
@@ -55,11 +74,51 @@ async def metrics_middleware(request, call_next):
         error_type = "client_error" if response.status_code < 500 else "server_error"
         ERROR_COUNT.labels(method=method, endpoint=endpoint, error_type=error_type).inc()
     
+    # Log response
+    log_level = logging.ERROR if response.status_code >= 500 else logging.WARNING if response.status_code >= 400 else logging.INFO
+    logger.log(
+        log_level,
+        "Request completed",
+        extra={
+            "method": method,
+            "endpoint": endpoint,
+            "status_code": response.status_code,
+            "process_time": process_time,
+            "request_id": id(request)
+        }
+    )
+    
     return response
 
 # In-memory storage for demo purposes
 users_db: List[User] = []
 user_id_counter = 1
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event"""
+    logger.info(
+        "FastAPI application starting up",
+        extra={
+            "app_name": "FastAPI Observability Demo",
+            "version": "1.0.0",
+            "startup_time": datetime.utcnow().isoformat()
+        }
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Application shutdown event"""
+    logger.info(
+        "FastAPI application shutting down",
+        extra={
+            "app_name": "FastAPI Observability Demo",
+            "shutdown_time": datetime.utcnow().isoformat(),
+            "total_users_created": len(users_db)
+        }
+    )
 
 
 @app.get("/")
@@ -106,11 +165,29 @@ async def create_user(user: UserCreate):
     """Create a new user"""
     global user_id_counter
     
+    logger.info(
+        "Creating new user",
+        extra={
+            "user_name": user.name,
+            "user_email": user.email,
+            "user_age": user.age,
+            "current_user_count": len(users_db)
+        }
+    )
+    
     # Simulate some processing time
     await simulate_processing()
     
     # Simulate random errors (10% chance)
     if random.random() < 0.1:
+        logger.error(
+            "Random server error occurred during user creation",
+            extra={
+                "user_name": user.name,
+                "user_email": user.email,
+                "error_type": "random_error"
+            }
+        )
         raise HTTPException(status_code=500, detail="Random server error")
     
     new_user = User(
@@ -124,18 +201,51 @@ async def create_user(user: UserCreate):
     users_db.append(new_user)
     user_id_counter += 1
     
+    logger.info(
+        "User created successfully",
+        extra={
+            "user_id": new_user.id,
+            "user_name": new_user.name,
+            "user_email": new_user.email,
+            "total_users": len(users_db)
+        }
+    )
+    
     return new_user
 
 
 @app.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: int):
     """Get a user by ID"""
+    logger.info(
+        "Retrieving user by ID",
+        extra={
+            "user_id": user_id,
+            "total_users": len(users_db)
+        }
+    )
+    
     await simulate_processing()
     
     for user in users_db:
         if user.id == user_id:
+            logger.info(
+                "User found",
+                extra={
+                    "user_id": user_id,
+                    "user_name": user.name,
+                    "user_email": user.email
+                }
+            )
             return user
     
+    logger.warning(
+        "User not found",
+        extra={
+            "user_id": user_id,
+            "total_users": len(users_db)
+        }
+    )
     raise HTTPException(status_code=404, detail="User not found")
 
 
@@ -161,7 +271,24 @@ async def slow_endpoint():
     """Endpoint that simulates slow processing"""
     # Simulate slow processing (2-5 seconds)
     sleep_time = random.uniform(2, 5)
+    
+    logger.info(
+        "Starting slow processing",
+        extra={
+            "expected_sleep_time": sleep_time,
+            "endpoint": "/slow"
+        }
+    )
+    
     time.sleep(sleep_time)
+    
+    logger.info(
+        "Slow processing completed",
+        extra={
+            "actual_sleep_time": sleep_time,
+            "endpoint": "/slow"
+        }
+    )
     
     return MessageResponse(
         message=f"Slow endpoint completed after {sleep_time:.2f} seconds",
@@ -173,6 +300,13 @@ async def slow_endpoint():
 @app.get("/error")
 async def error_endpoint():
     """Endpoint that always returns an error"""
+    logger.error(
+        "Intentional error endpoint called",
+        extra={
+            "endpoint": "/error",
+            "error_type": "intentional"
+        }
+    )
     raise HTTPException(status_code=500, detail="Intentional error for testing")
 
 
