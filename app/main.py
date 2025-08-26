@@ -4,6 +4,7 @@ from datetime import datetime
 import time
 import random
 from typing import List
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from .models import HealthResponse, User, UserCreate, MessageResponse
 
@@ -14,6 +15,48 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Initialize Prometheus metrics
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app)
+
+# Custom metrics
+from prometheus_client import Counter, Histogram, Gauge
+import asyncio
+
+# Custom Prometheus metrics
+REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+REQUEST_LATENCY = Histogram('http_request_duration_seconds', 'HTTP request latency', ['method', 'endpoint'])
+ACTIVE_USERS = Gauge('active_users_total', 'Total number of active users')
+ERROR_COUNT = Counter('http_errors_total', 'Total HTTP errors', ['method', 'endpoint', 'error_type'])
+
+# Middleware for custom metrics
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    start_time = time.time()
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Calculate metrics
+    process_time = time.time() - start_time
+    endpoint = request.url.path
+    method = request.method
+    status_code = str(response.status_code)
+    
+    # Update metrics
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status_code).inc()
+    REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(process_time)
+    
+    # Update active users count (based on current users in memory)
+    ACTIVE_USERS.set(len(users_db))
+    
+    # Track errors
+    if response.status_code >= 400:
+        error_type = "client_error" if response.status_code < 500 else "server_error"
+        ERROR_COUNT.labels(method=method, endpoint=endpoint, error_type=error_type).inc()
+    
+    return response
+
 # In-memory storage for demo purposes
 users_db: List[User] = []
 user_id_counter = 1
@@ -23,6 +66,22 @@ user_id_counter = 1
 async def root():
     """Root endpoint"""
     return {"message": "FastAPI Observability Demo", "timestamp": datetime.utcnow()}
+
+
+@app.get("/metrics-info")
+async def metrics_info():
+    """Information about available metrics"""
+    return {
+        "message": "Prometheus metrics are available at /metrics endpoint",
+        "custom_metrics": [
+            "http_requests_total - Total HTTP requests",
+            "http_request_duration_seconds - HTTP request latency", 
+            "active_users_total - Total number of active users",
+            "http_errors_total - Total HTTP errors"
+        ],
+        "standard_metrics": "Available via prometheus-fastapi-instrumentator",
+        "timestamp": datetime.utcnow()
+    }
 
 
 @app.get("/health", response_model=HealthResponse)
