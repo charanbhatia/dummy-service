@@ -1,258 +1,144 @@
-# FastAPI Observability Demo
+# FastAPI Observability Stack
 
-A comprehensive FastAPI application demonstrating complete observability with metrics, logging, and distributed tracing using modern monitoring tools.
+A complete observability solution for FastAPI applications with metrics, logging, and distributed tracing.
 
-## 🎯 Project Overview
+## 🚀 Features
 
-This project showcases a production-ready observability stack for FastAPI applications, implementing the three pillars of observability:
+- **Metrics Collection**: Prometheus integration with custom business metrics
+- **Centralized Logging**: Structured logging with Loki and Promtail
+- **Distributed Tracing**: Request tracing with Jaeger
+- **Visualization**: Pre-configured Grafana dashboards
+- **Containerized**: Full Docker Compose orchestration
 
-- **📊 Metrics**: Real-time performance and business metrics with Prometheus
-- **📝 Logs**: Structured logging with correlation IDs using Loki
-- **🔍 Traces**: Distributed request tracing with Jaeger and OpenTelemetry
+## 📊 Stack Components
 
-## 🏗️ Architecture
+| Component | Purpose | Port |
+|-----------|---------|------|
+| FastAPI | Main application | 8000 |
+| Prometheus | Metrics collection | 9090 |
+| Grafana | Visualization & dashboards | 3000 |
+| Loki | Log aggregation | 3100 |
+| Promtail | Log shipping | - |
+| Jaeger | Distributed tracing | 16686 |
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   FastAPI App   │────│   Prometheus    │────│    Grafana      │
-│   (Port 8000)   │    │   (Port 9090)   │    │   (Port 3000)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                                              │
-         │              ┌─────────────────┐             │
-         └──────────────│     Jaeger      │─────────────┘
-         │              │   (Port 16686)  │             │
-         │              └─────────────────┘             │
-         │                                              │
-         │              ┌─────────────────┐             │
-         └──────────────│      Loki       │─────────────┘
-                        │   (Port 3100)   │
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │    Promtail     │
-                        │  (Log Shipper)  │
-                        └─────────────────┘
-```
+## 🏃 Quick Start
 
-## 🚀 Quick Start
+1. **Clone and start the stack:**
+   ```bash
+   git clone https://github.com/charanbhatia/dummy-service
+   cd dummy-service
+   docker compose up -d
+   ```
 
-### Prerequisites
+2. **Generate sample traffic:**
+   ```bash
+   python tests/simulate_traffic.py
+   ```
 
-- Docker and Docker Compose
-- Python 3.11+
-- Git
+3. **Access the applications:**
+   - **FastAPI**: http://localhost:8000
+   - **Grafana**: http://localhost:3000 (admin/admin)
+   - **Prometheus**: http://localhost:9090
+   - **Jaeger**: http://localhost:16686
 
-### 1. Clone and Setup
+## 📈 Dashboard Features
 
-```bash
-git clone https://github.com/charanbhatia/dummy-service
-cd fastapi-observability-demo
-```
+The pre-configured Grafana dashboard provides:
 
-### 2. Start the Complete Stack
-
-**Windows (PowerShell):**
-```powershell
-.\start_stack.ps1
-```
-
-**Linux/Mac:**
-```bash
-chmod +x start_stack.sh
-./start_stack.sh
-```
-
-**Manual Docker Compose:**
-```bash
-docker-compose up --build -d
-```
-
-### 3. Generate Test Traffic
-
-```bash
-python tests/simulate_traffic.py
-```
-
-### 4. Access Services
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| **FastAPI Application** | http://localhost:8000 | - |
-| **Grafana Dashboard** | http://localhost:3000 | admin/admin |
-| **Prometheus** | http://localhost:9090 | - |
-| **Jaeger Tracing** | http://localhost:16686 | - |
-
-## 🎯 Features
-
-### FastAPI Application
-- RESTful API with CRUD operations for users
-- Health check endpoints
-- Error simulation endpoints
-- Slow endpoint for latency testing
-- Comprehensive input validation
-
-### Observability Stack
-- **Custom Metrics**: Request count, latency, error rates, active users
-- **Structured Logging**: JSON logs with correlation IDs and context
-- **Distributed Tracing**: Request flow visualization across services
-- **Pre-built Dashboards**: Ready-to-use Grafana dashboards
-- **Alerting Ready**: Prometheus metrics ready for alerting rules
-
-## 📊 Monitoring Capabilities
-
-### Metrics (Prometheus)
-- `http_requests_total` - Total HTTP requests by method, endpoint, status
-- `http_request_duration_seconds` - Request latency histogram
-- `active_users_total` - Current number of users in the system
-- `http_errors_total` - Error count by type and endpoint
-- Built-in FastAPI metrics via instrumentator
-
-### Logs (Loki + Promtail)
-- Structured JSON logging
-- Request/response correlation
-- Error tracking and context
-- Performance monitoring
-- Business logic events
-
-### Traces (Jaeger + OpenTelemetry)
-- End-to-end request tracing
-- Span-level performance analysis
-- Service dependency mapping
-- Error propagation tracking
-
-## 🧪 Testing
-
-### Run All Tests
-```bash
-python tests/test_phase5.py
-```
-
-### Specific Test Scenarios
-```bash
-# Test logging functionality
-python tests/test_logging.py
-
-# Test Prometheus metrics
-python tests/test_phase2.py
-
-# Test distributed tracing
-python tests/test_tracing.py
-
-# Generate realistic traffic
-python tests/simulate_traffic.py
-```
-
-## 📈 API Endpoints
-
-### Core Endpoints
-- `GET /` - Root endpoint with timestamp
-- `GET /health` - Health check with system status
-- `GET /metrics` - Prometheus metrics endpoint
-- `GET /metrics-info` - Information about available metrics
-
-### User Management
-- `GET /users` - List all users
-- `POST /users` - Create a new user
-- `GET /users/{id}` - Get user by ID
-- `DELETE /users/{id}` - Delete user by ID
-
-### Testing Endpoints
-- `GET /slow` - Simulates slow processing (2-5 seconds)
-- `GET /error` - Always returns 500 error for testing
+- **Request Rate**: Real-time HTTP request metrics
+- **Response Times**: Latency tracking by endpoint
+- **Error Rates**: HTTP status code breakdown
+- **Active Users**: Current user session tracking
+- **System Health**: Application performance metrics
 
 ## 🔧 Configuration
 
 ### Environment Variables
-- `JAEGER_AGENT_HOST` - Jaeger agent hostname
-- `JAEGER_AGENT_PORT` - Jaeger agent port
-- `PYTHONUNBUFFERED` - Python output buffering
 
-### Docker Compose Services
-- **app**: FastAPI application
-- **prometheus**: Metrics collection
-- **grafana**: Dashboards and visualization
-- **jaeger**: Distributed tracing
-- **loki**: Log aggregation
-- **promtail**: Log shipping
+The application supports these environment variables:
+
+- `LOG_LEVEL`: Logging level (default: INFO)
+- `JAEGER_ENDPOINT`: Jaeger collector endpoint
+- `PROMETHEUS_METRICS`: Enable/disable metrics (default: true)
+
+### Custom Metrics
+
+Add custom business metrics to `app/main.py`:
+
+```python
+from prometheus_client import Counter, Histogram
+
+# Custom counter
+user_registrations = Counter('user_registrations_total', 'Total user registrations')
+
+# Custom histogram  
+request_duration = Histogram('request_duration_seconds', 'Request duration')
+```
+
+## 🧪 Testing
+
+Run the traffic simulator to generate realistic test data:
+
+```bash
+python tests/simulate_traffic.py
+```
+
+This creates:
+- Normal user traffic patterns
+- Error scenarios (404s, 500s)
+- Slow endpoint testing
+- Load testing bursts
 
 ## 📁 Project Structure
 
 ```
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application with observability
-│   ├── models.py            # Pydantic models
-│   ├── logging_config.py    # Structured logging configuration
-│   └── tracing_config.py    # OpenTelemetry tracing setup
-├── grafana/
-│   ├── dashboards/          # Pre-built Grafana dashboards
-│   └── provisioning/        # Datasource and dashboard configs
-├── tests/
-│   ├── test_phase2.py       # Prometheus metrics tests
-│   ├── test_logging.py      # Logging functionality tests
-│   ├── test_tracing.py      # Distributed tracing tests
-│   ├── test_phase5.py       # Complete stack integration tests
-│   └── simulate_traffic.py  # Traffic generation for testing
-├── loki/
-│   └── loki-config.yml      # Loki configuration
-├── promtail/
-│   └── promtail-config.yml  # Log shipping configuration
-├── docker-compose.yml       # Complete stack definition
-├── Dockerfile              # FastAPI app container
-├── prometheus.yml           # Prometheus scrape configuration
-├── requirements.txt         # Python dependencies
-├── start_stack.ps1         # Windows startup script
-└── start_stack.sh          # Linux/Mac startup script
+├── app/                    # FastAPI application
+│   ├── main.py            # Main application
+│   ├── models.py          # Data models
+│   ├── logging_config.py  # Logging setup
+│   └── tracing_config.py  # Tracing setup
+├── grafana/               # Grafana configuration
+│   ├── dashboards/        # Dashboard definitions
+│   └── provisioning/      # Data sources & dashboards
+├── loki/                  # Loki configuration
+├── promtail/              # Promtail configuration
+├── tests/                 # Test utilities
+├── docker-compose.yml     # Service orchestration
+├── prometheus.yml         # Prometheus configuration
+└── requirements.txt       # Python dependencies
 ```
 
+## 🛠️ Development
 
-## 🛑 Cleanup
+### Adding New Endpoints
 
-Stop all services:
-```bash
-docker-compose down
-```
+1. Add endpoint to `app/main.py`
+2. Include appropriate logging and metrics
+3. Update the dashboard if needed
+4. Test with traffic simulator
 
-Remove all data volumes:
-```bash
-docker-compose down -v
-```
+### Monitoring Setup
 
-## 🎯 Project Phases
+The stack automatically configures:
+- Prometheus scraping of FastAPI metrics
+- Log forwarding to Loki
+- Jaeger trace collection
+- Grafana data source connections
 
-This project was built incrementally across multiple phases:
+## 📜 License
 
-1. **Phase 1** (branch: `main`): Basic FastAPI service setup
-2. **Phase 2** (branch: `prometheus-metrics`): Prometheus metrics integration
-3. **Phase 3** (branch: `logging`): Structured logging implementation
-4. **Phase 4** (branch: `tracing`): Distributed tracing with OpenTelemetry
-5. **Phase 5** (branch: `grafana`): Complete observability stack with Grafana
-
-Each phase is available as a separate Git branch for learning and reference.
-
-## 🔍 Key Learning Points
-
-- **Observability Strategy**: Implementing comprehensive monitoring from day one
-- **Modern Tooling**: Using industry-standard observability tools
-- **Production Readiness**: Configuration suitable for production environments
-- **Developer Experience**: Easy local development and testing workflow
-- **Performance Monitoring**: Real-time insights into application behavior
+This project is licensed under the MIT License.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+3. Add tests for new functionality
+4. Submit a pull request
 
-## 📄 License
+## 📞 Support
 
-This project is for educational and demonstration purposes.
-
-## 🙏 Acknowledgments
-
-- FastAPI framework and community
-- Prometheus and Grafana projects
-- OpenTelemetry community
-- Docker and containerization ecosystem
+For questions or issues, please open a GitHub issue with:
+- Environment details
+- Steps to reproduce
+- Expected vs actual behavior
